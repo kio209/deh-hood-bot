@@ -6,7 +6,7 @@ const Database = require('better-sqlite3');
 // Configuration
 const CONFIG = {
     BOT_TOKEN: process.env.BOT_TOKEN,
-    MODQUEUE_URL: 'https://humorous-clarity-production.up.railway.app',
+    MODQUEUE_URL: 'https://fortunate-success-production.up.railway.app',
     SECRET_KEY: 'DEHHOODXTR',
     BOT_OWNER_ID: '715293198741930064',
     LOGS_CHANNEL_ID: '1428200124018065438',
@@ -126,6 +126,30 @@ function getUserRank(userId) {
     if (userId === CONFIG.BOT_OWNER_ID) return 'owner';
     const user = db.prepare('SELECT rank FROM whitelist WHERE discord_id = ?').get(userId);
     return user ? user.rank : null;
+}
+
+async function getRobloxUserThumbnail(userId) {
+    try {
+        const response = await axios.get(`https://thumbnails.roproxy.com/v1/users/avatar-headshot?userIds=${userId}&size=150x150&format=Png&isCircular=false`);
+        if (response.data && response.data.data && response.data.data[0]) {
+            return response.data.data[0].imageUrl;
+        }
+    } catch (error) {
+        console.error('Error fetching thumbnail:', error);
+    }
+    return null;
+}
+
+async function getGroupThumbnail(groupId) {
+    try {
+        const response = await axios.get(`https://thumbnails.roproxy.com/v1/groups/icons?groupIds=${groupId}&size=150x150&format=Png&isCircular=false`);
+        if (response.data && response.data.data && response.data.data[0]) {
+            return response.data.data[0].imageUrl;
+        }
+    } catch (error) {
+        console.error('Error fetching group thumbnail:', error);
+    }
+    return null;
 }
 
 // Roblox API Functions
@@ -274,7 +298,7 @@ async function logCommand(interaction, action, details) {
 }
 
 // Confirmation System
-async function createConfirmation(interaction, title, description, fields, thumbnailUrl) {
+async function createConfirmation(interaction, title, description, fields, thumbnailUrl, imageUrl) {
     const embed = new EmbedBuilder()
         .setTitle(title)
         .setDescription(description)
@@ -287,6 +311,10 @@ async function createConfirmation(interaction, title, description, fields, thumb
     
     if (thumbnailUrl) {
         embed.setThumbnail(thumbnailUrl);
+    }
+    
+    if (imageUrl) {
+        embed.setImage(imageUrl);
     }
     
     const row = new ActionRowBuilder()
@@ -473,11 +501,23 @@ const commands = [
         .addStringOption(option => option.setName('proof').setDescription('Proof/Evidence').setRequired(true)),
     
     new SlashCommandBuilder()
+        .setName('unmute')
+        .setDescription('Unmute a player in-game')
+        .addStringOption(option => option.setName('player').setDescription('Username or UserID').setRequired(true))
+        .addStringOption(option => option.setName('reason').setDescription('Reason for unmute').setRequired(true)),
+    
+    new SlashCommandBuilder()
         .setName('strike')
         .setDescription('Issue a strike to a staff member')
         .addUserOption(option => option.setName('user').setDescription('Staff member').setRequired(true))
         .addStringOption(option => option.setName('reason').setDescription('Reason for strike').setRequired(true))
         .addStringOption(option => option.setName('proof').setDescription('Proof/Evidence').setRequired(true)),
+    
+    new SlashCommandBuilder()
+        .setName('removestrike')
+        .setDescription('Remove one strike from a staff member')
+        .addUserOption(option => option.setName('user').setDescription('Staff member').setRequired(true))
+        .addStringOption(option => option.setName('reason').setDescription('Reason for removal').setRequired(true)),
     
     new SlashCommandBuilder()
         .setName('grouprank')
@@ -625,6 +665,7 @@ client.on('interactionCreate', async interaction => {
         viewlogs: 'manager',
         announce: 'manager',
         strike: 'manager',
+        removestrike: 'manager',
         setcash: 'manager',
         punishmenthistory: 'admin',
         message: 'admin',
@@ -638,6 +679,7 @@ client.on('interactionCreate', async interaction => {
         warn: 'moderator',
         checkwarn: 'moderator',
         mute: 'moderator',
+        unmute: 'moderator',
         whois: 'moderator',
         'check-ccu': 'moderator'
     };
@@ -709,6 +751,8 @@ client.on('interactionCreate', async interaction => {
                 return interaction.reply({ content: '❌ Could not find that Roblox user.', ephemeral: true });
             }
             
+            const thumbnail = await getRobloxUserThumbnail(user.id);
+            
             const confirmed = await createConfirmation(
                 interaction,
                 'Confirm Kick',
@@ -719,7 +763,8 @@ client.on('interactionCreate', async interaction => {
                     { name: 'Reason', value: reason },
                     { name: 'Proof', value: proof }
                 ],
-                `https://www.roblox.com/headshot-thumbnail/image?userId=${user.id}&width=150&height=150&format=png`
+                thumbnail,
+                null
             );
             
             if (!confirmed) return;
@@ -1388,6 +1433,8 @@ client.on('interactionCreate', async interaction => {
             const durationMs = parseDuration(duration);
             const expiresAt = Date.now() + durationMs;
             
+            const thumbnail = await getRobloxUserThumbnail(user.id);
+            
             const confirmed = await createConfirmation(
                 interaction,
                 'Confirm Mute',
@@ -1400,7 +1447,8 @@ client.on('interactionCreate', async interaction => {
                     { name: 'Reason', value: reason },
                     { name: 'Proof', value: proof }
                 ],
-                `https://www.roblox.com/headshot-thumbnail/image?userId=${user.id}&width=150&height=150&format=png`
+                thumbnail,
+                null
             );
             
             if (!confirmed) return;
@@ -1420,6 +1468,47 @@ client.on('interactionCreate', async interaction => {
             });
             
             return interaction.editReply({ content: `✅ Successfully muted **${user.name || user.displayName}** for ${duration}`, embeds: [], components: [] });
+        }
+        
+        if (commandName === 'unmute') {
+            const playerInput = interaction.options.getString('player');
+            const reason = interaction.options.getString('reason');
+            
+            const user = isNaN(playerInput) ? await getRobloxUserByUsername(playerInput) : await getRobloxUserById(playerInput);
+            
+            if (!user) {
+                return interaction.reply({ content: '❌ Could not find that Roblox user.', ephemeral: true });
+            }
+            
+            const thumbnail = await getRobloxUserThumbnail(user.id);
+            
+            const confirmed = await createConfirmation(
+                interaction,
+                'Confirm Unmute',
+                `Are you sure you want to unmute this player?`,
+                [
+                    { name: 'Username', value: user.name || user.displayName },
+                    { name: 'User ID', value: String(user.id) },
+                    { name: 'Reason', value: reason }
+                ],
+                thumbnail,
+                null
+            );
+            
+            if (!confirmed) return;
+            
+            await sendToModqueue('unmute', { userId: user.id });
+            
+            db.prepare('INSERT INTO punishment_history (roblox_id, username, action, reason, proof, moderator, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)').run(
+                user.id, user.name || user.displayName, 'Unmute', reason, 'N/A', interaction.user.id, Date.now()
+            );
+            
+            await logCommand(interaction, 'Unmute', {
+                'Player': `${user.name || user.displayName} (${user.id})`,
+                'Reason': reason
+            });
+            
+            return interaction.editReply({ content: `✅ Successfully unmuted **${user.name || user.displayName}**`, embeds: [], components: [] });
         }
         
         if (commandName === 'strike') {
@@ -1725,8 +1814,4 @@ setInterval(() => {
     }
 }, 60000);
 
-client.login(CONFIG.BOT_TOKEN); 
-
-
-
-
+client.login(CONFIG.BOT_TOKEN);
