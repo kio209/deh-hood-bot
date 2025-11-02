@@ -6,7 +6,7 @@ const Database = require('better-sqlite3');
 // Configuration
 const CONFIG = {
     BOT_TOKEN: process.env.BOT_TOKEN,
-    MODQUEUE_URL: 'https://fortunate-success-production.up.railway.app',
+    MODQUEUE_URL: 'humorous-clarity-production.up.railway.app',
     SECRET_KEY: 'DEHHOODXTR',
     BOT_OWNER_ID: '715293198741930064',
     LOGS_CHANNEL_ID: '1428200124018065438',
@@ -1815,3 +1815,4 @@ setInterval(() => {
 }, 60000);
 
 client.login(CONFIG.BOT_TOKEN);
+
