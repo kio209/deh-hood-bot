@@ -2,11 +2,12 @@
   "name": "deh-hood-moderation-bot",
   "version": "1.0.0",
   "description": "Discord to Roblox moderation bot for Deh Hood",
-  "main": "index.js",
+  "main": "start.js",
   "scripts": {
-    "start": "node index.js",
+    "start": "node start.js",
+    "bot": "node index.js",
     "server": "node server.js",
-    "dev": "nodemon index.js"
+    "dev": "nodemon start.js"
   },
   "keywords": ["discord", "roblox", "moderation", "bot"],
   "author": "xtrf",
@@ -24,4 +25,4 @@
   "engines": {
     "node": ">=18.0.0"
   }
-} 
+}
